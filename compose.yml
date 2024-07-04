@@ -1,0 +1,56 @@
+
+services:
+  nginx:
+    image: nginx
+    ports:
+      - 8443:443
+    volumes:
+      - ./certificates:/ssl
+      - ./configs/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - paperless
+  broker:
+    image: docker.io/library/redis:7
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+
+  db:
+    image: docker.io/library/postgres:15
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: paperless
+
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    restart: unless-stopped
+    hostname: paperless
+    depends_on:
+      - db
+      - broker
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "-S", "--max-time", "2", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - ./data:/usr/src/paperless/data
+      - ./media:/usr/src/paperless/media
+      - ./export:/usr/src/paperless/export
+      - ./consume:/usr/src/paperless/consume
+    env_file: docker-compose.env
+    environment:
+      PAPERLESS_REDIS: redis://broker:6379
+      PAPERLESS_DBHOST: db
+    networks:
+      - default
+
+volumes:
+  data:
+  media:
+  pgdata:
+  redisdata:
